@@ -11,7 +11,7 @@ TEMP_DIR = "temp"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-st.title("TokTikMod")
+st.title("TokTikMod - Versi 1.1")
 
 uploaded = st.file_uploader("Upload video produk China", type=["mp4", "mov", "mkv"])
 
