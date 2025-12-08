@@ -59,8 +59,8 @@ def cleanup_temp():
 
 # ================ ORIGINAL FFMPEG PIPELINE ===============
 def run_ffmpeg(input_path, output_path, progress_bar, status_text):
-    crop_factor   = round(random.uniform(0.92, 0.97), 3)
-    rotate_deg    = round(random.uniform(-1.6, 1.6), 2)
+    crop_factor   = round(random.uniform(0.96, 1.00), 3)
+    rotate_deg    = round(random.uniform(-0.6, 0.6), 2)
     scale_factor  = round(random.uniform(0.98, 1.03), 3)
     speed_factor  = round(random.uniform(0.95, 1.05), 3)
     blur_sigma    = round(random.uniform(0.25, 0.55), 3)
