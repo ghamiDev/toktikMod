@@ -13,7 +13,7 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 
 st.title("TokTikMod - Versi 1.1")
 
-uploaded = st.file_uploader("Upload video produk China", type=["mp4", "mov", "mkv"])
+uploaded = st.file_uploader("Upload video panjenengan", type=["mp4", "mov", "mkv"])
 
 
 # =============== REAL-TIME FFMPEG PROGRESS ===============
