@@ -279,7 +279,7 @@ if len(uploaded_files) > 0:
         # ===================== 100%: FINAL EFFECT =====================
         st.info("Menerapkan beberapa efek visual ke video…")
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        out_path = f"{OUTPUT_DIR}/edited_{ts}.mp4"
+        out_path = f"{OUTPUT_DIR}/toktikmod_{ts}.mp4"
 
         apply_effect(shuffled_path, out_path)
 
