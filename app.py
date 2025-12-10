@@ -2,7 +2,6 @@ import streamlit as st
 import subprocess
 import random
 import os
-import re
 import shutil
 from datetime import datetime
 
@@ -11,139 +10,296 @@ TEMP_DIR = "temp"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-st.title("TokTikMod - Versi 1.1")
+# ================== SESSION CONTROL ==================
+if "output_video" not in st.session_state:
+    st.session_state["output_video"] = None
 
-uploaded = st.file_uploader("Upload video panjenengan", type=["mp4", "mov", "mkv"])
+st.title("TokTikMod - Versi Stabil 3.3 (Progress Bar + Zoom + Random Flip)")
 
+uploaded_files = st.file_uploader(
+    "Upload 1 atau 2 video",
+    type=["mp4", "mov", "mkv"],
+    accept_multiple_files=True
+)
 
-# =============== REAL-TIME FFMPEG PROGRESS ===============
-def ffmpeg_with_progress(cmd, progress_bar, status_text):
-    process = subprocess.Popen(
-        cmd,
-        stderr=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        universal_newlines=True,
-        bufsize=1
-    )
-
-    duration = None
-
-    for line in process.stderr:
-        # Get duration
-        if "Duration" in line:
-            match = re.search(r"Duration: (\d+):(\d+):(\d+.\d+)", line)
-            if match:
-                h, m, s = match.groups()
-                duration = int(h) * 3600 + int(m) * 60 + float(s)
-
-        # Current time
-        if "time=" in line and duration:
-            match = re.search(r"time=(\d+):(\d+):(\d+.\d+)", line)
-            if match:
-                h, m, s = match.groups()
-                current = int(h) * 3600 + int(m) * 60 + float(s)
-                progress = current / duration
-                progress_bar.progress(min(progress, 1.0))
-                status_text.text(f"Processing... {int(progress*100)}%")
-
-    process.wait()
-    return process
+if uploaded_files and len(uploaded_files) > 2:
+    st.warning("Hanya bisa upload maksimal 2 video!")
+    uploaded_files = uploaded_files[:2]
 
 
-# ===================== AUTO CLEANUP ======================
-def cleanup_temp():
-    if os.path.exists(TEMP_DIR):
-        shutil.rmtree(TEMP_DIR)
-        os.makedirs(TEMP_DIR, exist_ok=True)
+def run(cmd):
+    return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
-# ================ ORIGINAL FFMPEG PIPELINE ===============
-def run_ffmpeg(input_path, output_path, progress_bar, status_text):
-    crop_factor   = round(random.uniform(0.96, 1.00), 3)
-    rotate_deg    = round(random.uniform(-0.6, 0.6), 2)
-    scale_factor  = round(random.uniform(0.98, 1.03), 3)
-    speed_factor  = round(random.uniform(0.95, 1.05), 3)
-    blur_sigma    = round(random.uniform(0.25, 0.55), 3)
-    grain_strength = round(random.uniform(0.08, 0.14), 3)
-
-    filtergraph = (
-        f"crop=iw*{crop_factor}:ih*{crop_factor},"
-        f"rotate=0.0174533*{rotate_deg}:fillcolor=black,"
-        f"scale=iw*{scale_factor}:ih*{scale_factor},"
-        f"setsar=1,setpts=PTS/{speed_factor},"
-        f"eq=saturation=1.02:contrast=1.03:brightness=0.01:gamma=1.02,"
-        f"boxblur={blur_sigma}:{blur_sigma},"
-        f"noise=alls={grain_strength}:allf=t+u,"
-        f"scale=trunc(iw/2)*2:trunc(ih/2)*2,"
-        f"pad=width=ceil(iw/2)*2:height=ceil(ih/2)*2"
-    )
-
-    # Split video
-    split_cmd = [
-        "ffmpeg", "-y", "-i", input_path,
-        "-filter_complex", "split=3[v1][v2][v3]",
-        "-map", "[v1]", "-map", "0:a?", "-c:v", "libx264", "-c:a", "aac", f"{TEMP_DIR}/p1.mp4",
-        "-map", "[v2]", "-map", "0:a?", "-c:v", "libx264", "-c:a", "aac", f"{TEMP_DIR}/p2.mp4",
-        "-map", "[v3]", "-map", "0:a?", "-c:v", "libx264", "-c:a", "aac", f"{TEMP_DIR}/p3.mp4"
-    ]
-    subprocess.run(split_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    # Shuffle part
-    parts = ["p1.mp4", "p2.mp4", "p3.mp4"]
-    random.shuffle(parts)
-
-    with open(f"{TEMP_DIR}/list.txt", "w") as f:
-        for p in parts:
-            f.write(f"file '{p}'\n")
-
-    concat_out = f"{TEMP_DIR}/concat_temp.mp4"
-    concat_cmd = [
-        "ffmpeg", "-y", "-f", "concat", "-safe", "0",
-        "-i", f"{TEMP_DIR}/list.txt", "-c:v", "libx264", "-c:a", "aac",
-        "-vsync", "vfr", "-pix_fmt", "yuv420p", concat_out
-    ]
-    subprocess.run(concat_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    # Final effect (progress tracked)
-    final_cmd = [
+# ==============================================================    
+def normalize_video(input_path, output_path):
+    cmd = [
         "ffmpeg", "-y",
-        "-i", concat_out,
-        "-vf", filtergraph,
+        "-i", input_path,
+        "-vf",
+        "scale=1080:1920:force_original_aspect_ratio=decrease,"
+        "pad=1080:1920:(ow-iw)/2:(oh-ih)/2",
+        "-r", "30",
         "-c:v", "libx264", "-preset", "veryfast",
         "-c:a", "aac", "-b:a", "128k",
-        "-movflags", "+faststart",
+        output_path
+    ]
+    run(cmd)
+
+
+# ==============================================================    
+def concat_safest(videos, output):
+    list_file = f"{TEMP_DIR}/concat_list.txt"
+    with open(list_file, "w") as f:
+        for v in videos:
+            f.write(f"file '{os.path.abspath(v)}'\n")
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "concat", "-safe", "0",
+        "-i", list_file,
+        "-c:v", "libx264", "-preset", "veryfast",
+        "-c:a", "aac",
+        output
+    ]
+    run(cmd)
+
+
+# ==============================================================    
+def split_reencode(input_path):
+    for f in os.listdir(TEMP_DIR):
+        if f.startswith("seg_"):
+            os.remove(f"{TEMP_DIR}/{f}")
+
+    pattern = f"{TEMP_DIR}/seg_%03d.mp4"
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", input_path,
+        "-c:v", "libx264", "-preset", "veryfast",
+        "-c:a", "aac",
+        "-force_key_frames", "expr:gte(t,n_forced*3)",
+        "-segment_time", "3",
+        "-f", "segment",
+        pattern
+    ]
+
+    run(cmd)
+
+    return sorted([f"{TEMP_DIR}/{f}" for f in os.listdir(TEMP_DIR) if f.startswith("seg_")])
+
+
+# ==============================================================    
+def random_flip_segments(segments, progress, start, end):
+    total = len(segments)
+    flip_count = total // 2
+    flip_targets = random.sample(segments, flip_count)
+
+    flipped_segments = []
+    step = (end - start) / total
+    current = start
+
+    for seg in segments:
+        if seg in flip_targets:
+            out = seg.replace("seg_", "flip_")
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", seg,
+                "-vf", "hflip",
+                "-c:v", "libx264", "-preset", "veryfast",
+                "-c:a", "aac",
+                out
+            ]
+            run(cmd)
+            flipped_segments.append(out)
+        else:
+            flipped_segments.append(seg)
+
+        current += step
+        progress.progress(min(int(current), 100))
+
+    return flipped_segments
+
+
+# ==============================================================    
+def apply_effect(input_path, output_path):
+    zoom_h = "iw*1.07"
+    zoom_v = "ih*1.07"
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", input_path,
+        "-vf",
+        (
+            f"scale={zoom_h}:{zoom_v},"
+            "crop=1080:1920,"
+            "eq=saturation=1.05:contrast=1.03:brightness=0.02"
+        ),
+        "-c:v", "libx264", "-preset", "veryfast",
+        "-c:a", "aac",
         output_path
     ]
 
-    return ffmpeg_with_progress(final_cmd, progress_bar, status_text)
+    run(cmd)
 
 
-# ===================== STREAMLIT UI ======================
-if uploaded:
-    temp_input = f"{TEMP_DIR}/temp_input_video.mp4"
-    with open(temp_input, "wb") as f:
-        f.write(uploaded.read())
+# ============= CLEANING FUNCTIONS =============
+def clean_temp(temp_dir):
+    try:
+        for file in os.listdir(temp_dir):
+            file_path = os.path.join(temp_dir, file)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+            else:
+                shutil.rmtree(file_path)
+    except Exception as e:
+        st.warning(f"Failed to clean temp folder: {e}")
 
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path = f"{OUTPUT_DIR}/edited_{ts}.mp4"
 
-    st.info("Processing... mohon tunggu")
+def delete_file_after_download(path):
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except Exception as e:
+            st.warning(f"Cannot delete file: {e}")
+    st.session_state["output_video"] = None
 
-    progress_bar = st.progress(0)
-    status_text = st.empty()
 
-    process = run_ffmpeg(temp_input, out_path, progress_bar, status_text)
+# ============================== MAIN PROCESS =================================
 
-    if process.returncode != 0 or not os.path.exists(out_path):
-        st.error("FFmpeg gagal memproses video")
-        cleanup_temp()
-    else:
-        progress_bar.progress(1.0)
-        status_text.text("Selesai 100%")
-        st.success("Video berhasil diproses!")
+# Jika video SUDAH digenerate → jangan proses ulang, langsung tampilkan
+if st.session_state["output_video"]:
+    out_path = st.session_state["output_video"]
+
+    st.success("Video sudah siap! Silakan download.")
+
+    st.video(out_path)
+
+    with open(out_path, "rb") as f:
+        st.download_button(
+            label="Download Hasil",
+            data=f,
+            file_name=os.path.basename(out_path),
+            mime="video/mp4",
+            on_click=lambda: delete_file_after_download(out_path)
+        )
+    st.stop()
+
+
+# ======================== PROSES GENERATE VIDEO (1x saja) ========================
+
+if len(uploaded_files) > 0:
+    if st.button("Proses Video"):
+        # selalu bersihkan temp di awal proses
+        clean_temp(TEMP_DIR)
+
+        progress = st.progress(0)
+        pct = 0
+
+        normalized_paths = []
+
+        # ===================== 10%: SIMPAN + NORMALISASI =====================
+        for i, file in enumerate(uploaded_files):
+            raw_path = f"{TEMP_DIR}/raw_{i}.mp4"
+            norm_path = f"{TEMP_DIR}/norm_{i}.mp4"
+
+            with open(raw_path, "wb") as f:
+                f.write(file.getbuffer())
+
+            normalize_video(raw_path, norm_path)
+            normalized_paths.append(norm_path)
+
+            pct += 10
+            progress.progress(pct)
+
+        # ===================== 20%: CONCAT =====================
+        if len(normalized_paths) == 1:
+            merged = normalized_paths[0]
+        else:
+            merged = f"{TEMP_DIR}/merged.mp4"
+            concat_safest(normalized_paths, merged)
+
+        pct = 20
+        progress.progress(pct)
+
+        # ===================== 40%: SPLIT =====================
+        st.info("Memecah video menjadi segmen 3 detik…")
+        segments = split_reencode(merged)
+
+        pct = 40
+        progress.progress(pct)
+
+        # ===================== FILTER SEGMENT < 2 DETIK =====================
+        valid_segments = []
+        for seg in segments:
+            cmd = [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                seg
+            ]
+            try:
+                dur = float(subprocess.check_output(cmd).decode().strip())
+                if dur >= 2:
+                    valid_segments.append(seg)
+            except:
+                continue
+
+        segments = valid_segments
+
+        # ===================== 70%: RANDOM FLIP =====================
+        st.info("Memberikan efek horizontal flip pada sebagian segmen…")
+        segments = random_flip_segments(segments, progress, 40, 70)
+
+        # ===================== 80%: SHUFFLE =====================
+        random.shuffle(segments)
+        pct = 80
+        progress.progress(pct)
+
+        # ===================== 90%: CONCAT FINAL =====================
+        list_file = f"{TEMP_DIR}/final_list.txt"
+        with open(list_file, "w") as f:
+            for seg in segments:
+                f.write(f"file '{os.path.abspath(seg)}'\n")
+
+        shuffled_path = f"{TEMP_DIR}/shuffled.mp4"
+
+        run([
+            "ffmpeg", "-y",
+            "-f", "concat", "-safe", "0",
+            "-i", list_file,
+            "-c:v", "libx264", "-preset", "veryfast",
+            "-c:a", "aac",
+            shuffled_path
+        ])
+
+        pct = 90
+        progress.progress(pct)
+
+        # ===================== 100%: FINAL EFFECT =====================
+        st.info("Menerapkan efek zoom + color grading…")
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_path = f"{OUTPUT_DIR}/edited_{ts}.mp4"
+
+        apply_effect(shuffled_path, out_path)
+
+        pct = 100
+        progress.progress(pct)
+
+        # SELESAI
+        st.success("Video berhasil diproses 100%!")
+
         st.video(out_path)
 
-        with open(out_path, "rb") as f:
-            st.download_button("Download Video", f, file_name=f"edited_{ts}.mp4")
+        st.session_state["output_video"] = out_path  # SIMPAN HASIL
 
-        cleanup_temp()
+        clean_temp(TEMP_DIR)
+
+        with open(out_path, "rb") as f:
+            st.download_button(
+                label="Download Hasil",
+                data=f,
+                file_name=os.path.basename(out_path),
+                mime="video/mp4",
+                on_click=lambda: delete_file_after_download(out_path)
+            )
