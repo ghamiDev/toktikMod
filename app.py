@@ -123,8 +123,8 @@ def random_flip_segments(segments, progress, start, end):
 
 # ==============================================================    
 def apply_effect(input_path, output_path):
-    zoom_h = "iw*1.15"
-    zoom_v = "ih*1.15"
+    zoom_h = "iw*1.25"
+    zoom_v = "ih*1.25"
 
     cmd = [
         "ffmpeg", "-y",
