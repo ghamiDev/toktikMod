@@ -14,7 +14,7 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 if "output_video" not in st.session_state:
     st.session_state["output_video"] = None
 
-st.title("TokTikMod - Versi Stabil 3.3 (Progress Bar + Zoom + Random Flip)")
+st.title("TokTikMod - Versi Stabil 1.1 (Req - Gu51m1n)")
 
 uploaded_files = st.file_uploader(
     "Upload 1 atau 2 video",
