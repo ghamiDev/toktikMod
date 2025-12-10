@@ -248,7 +248,7 @@ if len(uploaded_files) > 0:
         segments = valid_segments
 
         # ===================== 70%: RANDOM FLIP =====================
-        st.info("Memberikan efek horizontal flip pada sebagian segmen…")
+        st.info("Memberikan efek horizontal flip, croping dan scaling pada segmen…")
         segments = random_flip_segments(segments, progress, 40, 70)
 
         # ===================== 80%: SHUFFLE =====================
@@ -277,7 +277,7 @@ if len(uploaded_files) > 0:
         progress.progress(pct)
 
         # ===================== 100%: FINAL EFFECT =====================
-        st.info("Menerapkan efek zoom + color grading…")
+        st.info("Menerapkan beberapa efek visual ke video…")
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         out_path = f"{OUTPUT_DIR}/edited_{ts}.mp4"
 
