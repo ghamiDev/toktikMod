@@ -39,7 +39,6 @@ def normalize_video(input_path, output_path):
         "-vf",
         "scale=1080:1920:force_original_aspect_ratio=decrease,"
         "pad=1080:1920:(ow-iw)/2:(oh-ih)/2",
-        "-r", "25",
         "-c:v", "libx264", "-preset", "veryfast",
         "-c:a", "aac", "-b:a", "128k",
         output_path
@@ -152,7 +151,6 @@ def apply_effect(input_path, output_path, mute_final=False):
             f"scale={zoom_h}:{zoom_v},"
             "crop=1080:1920,"
             "unsharp=5:5:0.5,"
-            "eq=saturation=1.05:contrast=1.03:brightness=0.02"
         ),
     ]
 
