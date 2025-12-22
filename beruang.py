@@ -39,7 +39,7 @@ def normalize_video(input_path, output_path):
         "-vf",
         "scale=1080:1920:force_original_aspect_ratio=decrease,"
         "pad=1080:1920:(ow-iw)/2:(oh-ih)/2",
-        "-r", "30",
+        "-r", "25",
         "-c:v", "libx264", "-preset", "veryfast",
         "-c:a", "aac", "-b:a", "128k",
         output_path
